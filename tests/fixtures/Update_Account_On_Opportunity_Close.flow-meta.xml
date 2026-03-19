@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>62.0</apiVersion>
+    <description>商談のステージが「Closed Won」に変更された際に、取引先の優先度を更新し、Apex バリデーションを呼び出すフロー</description>
+    <label>Update Account On Opportunity Close</label>
+    <processType>AutoLaunchedFlow</processType>
+    <status>Active</status>
+
+    <!-- 開始条件 -->
+    <start>
+        <object>Opportunity</object>
+        <triggerType>RecordAfterSave</triggerType>
+        <recordTriggerType>Update</recordTriggerType>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>StageName</field>
+            <operator>EqualTo</operator>
+            <value>
+                <stringValue>Closed Won</stringValue>
+            </value>
+        </filters>
+        <filters>
+            <field>Amount</field>
+            <operator>GreaterThan</operator>
+            <value>
+                <numberValue>0</numberValue>
+            </value>
+        </filters>
+        <connector>
+            <targetReference>Check_Amount</targetReference>
+        </connector>
+    </start>
+
+    <!-- 数式 -->
+    <formulas>
+        <name>TaxAmount</name>
+        <dataType>Currency</dataType>
+        <expression>{!$Record.Amount} * 0.1</expression>
+    </formulas>
+
+    <!-- 分岐: 金額チェック -->
+    <decisions>
+        <name>Check_Amount</name>
+        <label>金額チェック</label>
+        <rules>
+            <name>Over_1M</name>
+            <label>100万以上</label>
+            <conditions>
+                <leftValueReference>$Record.Amount</leftValueReference>
+                <operator>GreaterThan</operator>
+                <rightValue>
+                    <numberValue>1000000</numberValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Get_Account</targetReference>
+            </connector>
+        </rules>
+        <defaultConnector>
+            <targetReference>Update_Opp_Description</targetReference>
+        </defaultConnector>
+    </decisions>
+
+    <!-- レコード参照: 取引先を取得 -->
+    <recordLookups>
+        <name>Get_Account</name>
+        <label>取引先を取得</label>
+        <object>Account</object>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>$Record.AccountId</elementReference>
+            </value>
+        </filters>
+        <outputAssignments>
+            <field>Name</field>
+            <assignToReference>accountName</assignToReference>
+        </outputAssignments>
+        <connector>
+            <targetReference>Update_Account_Priority</targetReference>
+        </connector>
+    </recordLookups>
+
+    <!-- レコード更新: 取引先の優先度を更新 -->
+    <recordUpdates>
+        <name>Update_Account_Priority</name>
+        <label>取引先の優先度更新</label>
+        <object>Account</object>
+        <inputAssignments>
+            <field>Priority__c</field>
+            <value>
+                <stringValue>High</stringValue>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Last_Won_Date__c</field>
+            <value>
+                <elementReference>$Record.CloseDate</elementReference>
+            </value>
+        </inputAssignments>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>$Record.AccountId</elementReference>
+            </value>
+        </filters>
+        <connector>
+            <targetReference>Call_Validation</targetReference>
+        </connector>
+    </recordUpdates>
+
+    <!-- レコード更新: 商談の説明を更新 -->
+    <recordUpdates>
+        <name>Update_Opp_Description</name>
+        <label>商談の説明更新</label>
+        <object>Opportunity</object>
+        <inputAssignments>
+            <field>Description</field>
+            <value>
+                <stringValue>自動処理済み</stringValue>
+            </value>
+        </inputAssignments>
+    </recordUpdates>
+
+    <!-- Apex アクション -->
+    <actionCalls>
+        <name>Call_Validation</name>
+        <label>バリデーション実行</label>
+        <actionType>apex</actionType>
+        <actionName>AccountValidator</actionName>
+        <inputParameters>
+            <name>accountId</name>
+            <value>
+                <elementReference>$Record.AccountId</elementReference>
+            </value>
+        </inputParameters>
+        <outputParameters>
+            <name>isValid</name>
+            <assignToReference>validationResult</assignToReference>
+        </outputParameters>
+        <connector>
+            <targetReference>Send_Notification</targetReference>
+        </connector>
+    </actionCalls>
+
+    <!-- サブフロー呼び出し -->
+    <subflows>
+        <name>Send_Notification</name>
+        <label>通知送信</label>
+        <flowName>Send_Email_Notification</flowName>
+        <inputAssignments>
+            <name>recordId</name>
+            <value>
+                <elementReference>$Record.Id</elementReference>
+            </value>
+        </inputAssignments>
+    </subflows>
+
+    <!-- 変数 -->
+    <variables>
+        <name>accountName</name>
+        <dataType>String</dataType>
+        <isCollection>false</isCollection>
+    </variables>
+    <variables>
+        <name>validationResult</name>
+        <dataType>Boolean</dataType>
+        <isCollection>false</isCollection>
+    </variables>
+</Flow>

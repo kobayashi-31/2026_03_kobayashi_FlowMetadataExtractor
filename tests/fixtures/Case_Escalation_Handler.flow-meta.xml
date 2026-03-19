@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Flow xmlns="http://soap.sforce.com/2006/04/metadata">
+    <apiVersion>62.0</apiVersion>
+    <description>新規ケースが作成された際に、取引先の最終ケース日を更新し、優先度に応じてエスカレーションする</description>
+    <label>Case Escalation Handler</label>
+    <processType>AutoLaunchedFlow</processType>
+    <status>Active</status>
+
+    <start>
+        <object>Case</object>
+        <triggerType>RecordAfterSave</triggerType>
+        <recordTriggerType>Create</recordTriggerType>
+        <filterLogic>and</filterLogic>
+        <filters>
+            <field>Status</field>
+            <operator>EqualTo</operator>
+            <value>
+                <stringValue>New</stringValue>
+            </value>
+        </filters>
+        <connector>
+            <targetReference>Check_Priority</targetReference>
+        </connector>
+    </start>
+
+    <decisions>
+        <name>Check_Priority</name>
+        <label>優先度チェック</label>
+        <rules>
+            <name>Is_High</name>
+            <label>高優先度</label>
+            <conditions>
+                <leftValueReference>$Record.Priority</leftValueReference>
+                <operator>EqualTo</operator>
+                <rightValue>
+                    <stringValue>High</stringValue>
+                </rightValue>
+            </conditions>
+            <connector>
+                <targetReference>Update_Account_Last_Case</targetReference>
+            </connector>
+        </rules>
+        <defaultConnector>
+            <targetReference>Update_Account_Last_Case</targetReference>
+        </defaultConnector>
+    </decisions>
+
+    <recordUpdates>
+        <name>Update_Account_Last_Case</name>
+        <label>取引先の最終ケース日を更新</label>
+        <object>Account</object>
+        <inputAssignments>
+            <field>Last_Case_Date__c</field>
+            <value>
+                <elementReference>$Record.CreatedDate</elementReference>
+            </value>
+        </inputAssignments>
+        <inputAssignments>
+            <field>Priority__c</field>
+            <value>
+                <elementReference>$Record.Priority</elementReference>
+            </value>
+        </inputAssignments>
+        <filters>
+            <field>Id</field>
+            <operator>EqualTo</operator>
+            <value>
+                <elementReference>$Record.AccountId</elementReference>
+            </value>
+        </filters>
+        <connector>
+            <targetReference>Send_Alert</targetReference>
+        </connector>
+    </recordUpdates>
+
+    <subflows>
+        <name>Send_Alert</name>
+        <label>アラート送信</label>
+        <flowName>Send_Email_Notification</flowName>
+        <inputAssignments>
+            <name>recordId</name>
+            <value>
+                <elementReference>$Record.Id</elementReference>
+            </value>
+        </inputAssignments>
+    </subflows>
+</Flow>
