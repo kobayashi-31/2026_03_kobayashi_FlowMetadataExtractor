@@ -1,33 +1,33 @@
 @echo off
 REM ============================================================
-REM Flow Metadata Extractor - 複数 Flow 一括解析スクリプト
+REM Flow Metadata Extractor - Batch Analysis Script
 REM ============================================================
-REM 使い方:
-REM   run_batch.bat                          # デフォルト設定で実行
-REM   run_batch.bat --local                  # ローカル XML で実行
-REM   run_batch.bat --target-org myOrg       # org を指定
+REM Usage:
+REM   run_batch.bat                          # Run with default settings
+REM   run_batch.bat --local                  # Run using local XML
+REM   run_batch.bat --target-org myOrg       # Specify org
 REM ============================================================
 
-REM ─── 設定 ───
-REM カンマ区切りで対象 Flow の API Name を列挙
+REM --- Settings ---
+REM Comma-separated Flow API Names
 set FLOW_NAMES=CV_UpdateTrigger,WB_UpdateTrigger,WB_UpsertFIxedBudgets,WB_DuplicatedUpdate,WB_RetryDeletion,working_budget_change_industries
 
-REM sf CLI の接続先 org エイリアス（空ならデフォルト org）
+REM sf CLI target org alias (empty = default org)
 set TARGET_ORG=myOrg
 
-REM 出力先
+REM Output directory
 set OUTPUT_DIR=./output
 
-REM ローカル XML テスト用ディレクトリ
+REM Local XML test directory
 set LOCAL_XML_DIR=./tests/fixtures
 
-REM ─── 仮想環境の有効化 ───
+REM --- Activate Virtual Environment (if exists) ---
 if exist ".venv\Scripts\activate.bat" (
     call .venv\Scripts\activate.bat
-    echo [INFO] 仮想環境を有効化しました
+    echo [INFO] Virtual environment activated.
 )
 
-REM ─── 引数チェック ───
+REM --- Parse Arguments ---
 set USE_LOCAL=false
 :parse_args
 if "%~1"=="" goto :run
@@ -47,22 +47,21 @@ goto :parse_args
 
 :run
 echo ============================================================
-echo  Flow Metadata Extractor - 一括解析
+echo  Flow Metadata Extractor - Batch Analysis
 echo ============================================================
 
 if "%USE_LOCAL%"=="true" (
-    echo [MODE] ローカル XML ディレクトリ: %LOCAL_XML_DIR%
+    echo [MODE] Local XML directory: %LOCAL_XML_DIR%
     python main.py --local-xml-dir %LOCAL_XML_DIR% --output-dir %OUTPUT_DIR%
 ) else (
-    echo [MODE] Salesforce org から retrieve
+    echo [MODE] Retrieve from Salesforce org: %TARGET_ORG%
     echo [FLOWS] %FLOW_NAMES%
     if "%TARGET_ORG%"=="" (
         python main.py --flow-name %FLOW_NAMES% --output-dir %OUTPUT_DIR%
     ) else (
-        echo [ORG] %TARGET_ORG%
         python main.py --flow-name %FLOW_NAMES% --output-dir %OUTPUT_DIR% --target-org %TARGET_ORG%
     )
 )
 
 echo.
-echo [DONE] 出力先: %OUTPUT_DIR%
+echo [DONE] Output generated in: %OUTPUT_DIR%

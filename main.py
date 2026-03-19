@@ -28,6 +28,8 @@ from parser import FlowParser
 from dependency_resolver import DependencyResolver
 from normalizer import AnalysisNormalizer
 from reporter import MarkdownReporter
+from auth import load_env_file, soap_login, register_session_to_sf
+import os
 
 
 def setup_logging(output_dir: Path, verbose: bool = False):
@@ -340,6 +342,37 @@ def main():
         if not retriever.check_sf_cli():
             logger.error("sf CLI が利用できません。終了します。")
             sys.exit(1)
+
+        # ── SOAP Login (.env 経由) の確認 ──
+        load_env_file(".env")
+        sf_user = os.environ.get("SF_USERNAME")
+        sf_pass = os.environ.get("SF_PASSWORD")
+        if sf_user and sf_pass:
+            logger.info(f".env の設定を検知。SOAP API で認証します ({sf_user})")
+            sf_token = os.environ.get("SF_SECURITY_TOKEN", "")
+            sf_url = os.environ.get(
+                "SF_INSTANCE_URL", "https://login.salesforce.com"
+            )
+
+            try:
+                auth_info = soap_login(
+                    username=sf_user,
+                    password=sf_pass,
+                    security_token=sf_token,
+                    login_url=sf_url,
+                )
+                
+                # トークンを sf に登録
+                # エイリアスは対象 org が指定されていればそれ（上書き）、なければ "soapOrg"
+                alias = args.target_org or "soapOrg"
+                if register_session_to_sf(auth_info, alias):
+                    args.target_org = alias
+                    retriever.target_org = alias
+                else:
+                    logger.warning("sf へのセッション登録に失敗したため、既存の認証情報を使用します。")
+            except Exception as e:
+                logger.error(f"SOAP 認証に失敗しました: {e}")
+                sys.exit(1)
 
         flow_names = [
             n.strip() for n in args.flow_name.split(",")

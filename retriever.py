@@ -4,7 +4,6 @@ sf CLI を使って Salesforce からメタデータを取得する
 """
 import subprocess
 import logging
-import shutil
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -21,10 +20,15 @@ class MetadataRetriever:
 
     def check_sf_cli(self) -> bool:
         """sf CLI がインストールされているか確認"""
+        import shutil
+        sf_cmd = shutil.which("sf")
+        if not sf_cmd:
+            return False
+
         try:
             result = subprocess.run(
-                ["sf", "--version"],
-                capture_output=True, text=True, timeout=15
+                [sf_cmd, "--version"],
+                capture_output=True, text=True, encoding="utf-8", timeout=15
             )
             if result.returncode == 0:
                 logger.info(f"sf CLI 検出: {result.stdout.strip()}")
@@ -60,10 +64,18 @@ class MetadataRetriever:
         sf CLI でメタデータを retrieve する共通処理
         retrieve 先は self.raw_dir に統一
         """
+        import shutil
+        sf_cmd = shutil.which("sf")
+        if not sf_cmd:
+            raise RuntimeError("sf CLI が見つかりません。")
+
         cmd = [
-            "sf", "project", "retrieve", "start",
+            sf_cmd,
+            "project",
+            "retrieve",
+            "start",
             "--metadata", metadata_spec,
-            "--target-metadata-dir", str(self.raw_dir),
+            "--target-metadata-dir", str(self.raw_dir)
         ]
         if self.target_org:
             cmd.extend(["--target-org", self.target_org])
@@ -72,7 +84,7 @@ class MetadataRetriever:
 
         try:
             result = subprocess.run(
-                cmd, capture_output=True, text=True, timeout=120
+                cmd, capture_output=True, text=True, encoding="utf-8", timeout=120
             )
             if result.returncode == 0:
                 logger.info(f"retrieve 成功: {metadata_spec}")
